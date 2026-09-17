@@ -1,9 +1,11 @@
 ARG BASE_IMAGE_TAG=v11-2503
-FROM cr.kylinos.cn/kylin/kylin-server-minimal:${BASE_IMAGE_TAG}
+FROM ghcr.io/blueapple168/kylin-server-minimal:${BASE_IMAGE_TAG}
 
-LABEL maintainer="blueapple" \
-      version="1.0" \
-      description="Dotnet runtime-deps"
+LABEL org.opencontainers.image.authors="blueapple" \
+      org.opencontainers.image.version="1.0" \
+      org.opencontainers.image.description="Dotnet runtime-deps" \
+      org.opencontainers.image.base.name="cr.kylinos.cn/kylin/kylin-server-minimal" \
+      org.opencontainers.image.base.version="${BASE_IMAGE_TAG}"
 
 ENV \
     APP_UID=1654 \
