@@ -16,7 +16,6 @@ RUN dotnet_sdk_version=8.0.425 \
         dotnet-sdk-$dotnet_sdk_version-linux-x64.tar.gz \
         $dotnet_version-sha.txt
 
-
 # .NET SDK image
 FROM $REPO
 
