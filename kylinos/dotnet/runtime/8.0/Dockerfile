@@ -1,0 +1,25 @@
+ARG REPO=ghcr.io/blueapple168/dotnet-kylinos/runtime-deps:runtime-deps
+# Installer image
+FROM $REPO AS installer
+# Retrieve .NET Runtime
+RUN dotnet_version=8.0.31 \
+    && curl --fail --show-error --location \
+        --remote-name https://builds.dotnet.microsoft.com/dotnet/Runtime/$dotnet_version/dotnet-runtime-$dotnet_version-linux-x64.tar.gz \
+        --remote-name https://builds.dotnet.microsoft.com/dotnet/checksums/$dotnet_version-sha.txt \
+    && sed -i 's/\r$//' $dotnet_version-sha.txt \
+    && sha512sum -c $dotnet_version-sha.txt --ignore-missing \
+    && mkdir --parents /dotnet \
+    && tar --gzip --extract --no-same-owner --file dotnet-runtime-$dotnet_version-linux-x64.tar.gz --directory /dotnet \
+    && rm \
+        dotnet-runtime-$dotnet_version-linux-x64.tar.gz \
+        $dotnet_version-sha.txt
+
+# .NET runtime image
+FROM $REPO AS runtime
+
+# .NET Runtime version
+ENV DOTNET_VERSION=8.0.31
+
+COPY --from=installer ["/dotnet", "/usr/share/dotnet"]
+
+RUN ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
