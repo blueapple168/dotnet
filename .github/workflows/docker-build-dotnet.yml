@@ -13,13 +13,13 @@ env:
   # 定义全部8组构建项：context目录,镜像repo,tagname
   BUILD_LIST: |
     ./kylinos/dotnet/runtime-deps;blueapple168/dotnet-kylinos/runtime-deps;runtime-deps
-    ./kylinos/dotnet/runtime/8.0;blueapple168/dotnet-kylinos/runtime-8.0;runtime-8.0
-    ./kylinos/dotnet/aspnet/8.0;blueapple168/dotnet-kylinos/aspnet-8.0;aspnet-8.0
-    ./kylinos/dotnet/sdk/8.0;blueapple168/dotnet-kylinos/sdk-8.0;sdk-8.0
+    ./kylinos/dotnet/runtime/8.0;blueapple168/dotnet-kylinos/runtime;8.0
+    ./kylinos/dotnet/aspnet/8.0;blueapple168/dotnet-kylinos/aspnet;8.0
+    ./kylinos/dotnet/sdk/8.0;blueapple168/dotnet-kylinos/sdk;8.0
     ./uos/dotnet/runtime-deps;blueapple168/dotnet-uos/runtime-deps;runtime-deps
-    ./uos/dotnet/runtime/8.0;blueapple168/dotnet-uos/runtime-8.0;runtime-8.0
-    ./uos/dotnet/aspnet/8.0;blueapple168/dotnet-uos/aspnet-8.0;aspnet-8.0
-    ./uos/dotnet/sdk/8.0;blueapple168/dotnet-uos/sdk-8.0;sdk-8.0
+    ./uos/dotnet/runtime/8.0;blueapple168/dotnet-uos/runtime;8.0
+    ./uos/dotnet/aspnet/8.0;blueapple168/dotnet-uos/aspnet;8.0
+    ./uos/dotnet/sdk/8.0;blueapple168/dotnet-uos/sdk;8.0
 
 permissions:
   contents: read
