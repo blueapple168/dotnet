@@ -1,4 +1,4 @@
-ARG REPO=ghcr.io/blueapple168/dotnet-uos/runtime-8.0:runtime-8.0
+ARG REPO=ghcr.io/blueapple168/dotnet-uos/runtime:8.0
 
 # Installer image
 FROM $REPO AS installer
