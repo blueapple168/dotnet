@@ -5,6 +5,7 @@ on:
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -52,8 +53,8 @@ jobs:
           C2_CLEAN="${C2#./}"
           TARGET_ITEMS=()
 
-          if [[ "${REF_TYPE}" == "tag" ]]; then
-            # tag触发：全部强制构建
+          if [[ "${REF_TYPE}" == "tag" || "${EVENT}" == "workflow_dispatch" ]]; then
+            # tag触发 OR 网页手动触发：全部强制构建
             TARGET_ITEMS+=("{\"context\":\"${C1}\",\"repo\":\"${R1}\",\"tagname\":\"runtime-deps\"}")
             TARGET_ITEMS+=("{\"context\":\"${C2}\",\"repo\":\"${R2}\",\"tagname\":\"runtime-deps\"}")
           else
