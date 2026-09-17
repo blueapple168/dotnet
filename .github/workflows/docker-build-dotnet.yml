@@ -2,7 +2,7 @@ name: Docker Build dotnet (KylinOS & UOS, amd64 only)
 on:
   push:
     branches: [ "main" ]
-  tags: [ 'v*.*.*' ]
+    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
