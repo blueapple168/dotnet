@@ -1,8 +1,8 @@
-name: Docker Build dotnet runtime‑deps (KylinOS & UOS, amd64 only)
+name: Docker Build dotnet (KylinOS & UOS, amd64 only)
 on:
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+  tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -10,11 +10,16 @@ on:
 env:
   REGISTRY: ghcr.io
   PLATFORMS: linux/amd64
-  # 定义两组构建上下文与镜像repo
-  BUILD_1_CONTEXT: "./kylinos/dotnet/runtime-deps"
-  BUILD_1_REPO: "blueapple168/dotnet-kylinos/runtime-deps"
-  BUILD_2_CONTEXT: "./uos/dotnet/runtime-deps"
-  BUILD_2_REPO: "blueapple168/dotnet-uos/runtime-deps"
+  # 定义全部8组构建项：context目录,镜像repo,tagname
+  BUILD_LIST: |
+    ./kylinos/dotnet/runtime-deps;blueapple168/dotnet-kylinos/runtime-deps;runtime-deps
+    ./kylinos/dotnet/runtime/8.0;blueapple168/dotnet-kylinos/runtime-8.0;runtime-8.0
+    ./kylinos/dotnet/aspnet/8.0;blueapple168/dotnet-kylinos/aspnet-8.0;aspnet-8.0
+    ./kylinos/dotnet/sdk/8.0;blueapple168/dotnet-kylinos/sdk-8.0;sdk-8.0
+    ./uos/dotnet/runtime-deps;blueapple168/dotnet-uos/runtime-deps;runtime-deps
+    ./uos/dotnet/runtime/8.0;blueapple168/dotnet-uos/runtime-8.0;runtime-8.0
+    ./uos/dotnet/aspnet/8.0;blueapple168/dotnet-uos/aspnet-8.0;aspnet-8.0
+    ./uos/dotnet/sdk/8.0;blueapple168/dotnet-uos/sdk-8.0;sdk-8.0
 
 permissions:
   contents: read
@@ -32,57 +37,47 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
 
       - name: Generate build matrix decision
         id: gen_matrix
-        env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
-          EVENT: ${{ github.event_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          C1: ${{ env.BUILD_1_CONTEXT }}
-          R1: ${{ env.BUILD_1_REPO }}
-          C2: ${{ env.BUILD_2_CONTEXT }}
-          R2: ${{ env.BUILD_2_REPO }}
         run: |
-          # 清理 ./ 前缀
-          C1_CLEAN="${C1#./}"
-          C2_CLEAN="${C2#./}"
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          EVENT="${{ github.event_name }}"
+          REF_TYPE="${{ github.ref_type }}"
           TARGET_ITEMS=()
 
-          if [[ "${REF_TYPE}" == "tag" || "${EVENT}" == "workflow_dispatch" ]]; then
-            # tag触发 OR 网页手动触发：全部强制构建
-            TARGET_ITEMS+=("{\"context\":\"${C1}\",\"repo\":\"${R1}\",\"tagname\":\"runtime-deps\"}")
-            TARGET_ITEMS+=("{\"context\":\"${C2}\",\"repo\":\"${R2}\",\"tagname\":\"runtime-deps\"}")
-          else
-            # push / pr: 判断目录下是否有文件变更
-            while IFS= read -r file; do
-              [[ -z "${file}" ]] && continue
-              if [[ "${file}" == "${C1_CLEAN}/"* ]]; then
-                echo "✅ kylinos directory changed"
-                TARGET_ITEMS+=("{\"context\":\"${C1}\",\"repo\":\"${R1}\",\"tagname\":\"runtime-deps\"}")
-                break
-              fi
-            done < <(echo "${CHANGED_FILES}")
+          # read build list env
+          while IFS=';' read -r ctx repo tagname; do
+            [[ -z "${ctx}" || -z "${repo}" || -z "${tagname}" ]] && continue
+            CTX_CLEAN="${ctx#./}"
 
-            while IFS= read -r file; do
-              [[ -z "${file}" ]] && continue
-              if [[ "${file}" == "${C2_CLEAN}/"* ]]; then
-                echo "✅ uos directory changed"
-                TARGET_ITEMS+=("{\"context\":\"${C2}\",\"repo\":\"${R2}\",\"tagname\":\"runtime-deps\"}")
-                break
+            if [[ "${REF_TYPE}" == "tag" || "${EVENT}" == "workflow_dispatch" ]]; then
+              # tag / manual trigger: add all
+              TARGET_ITEMS+=("{\"context\":\"${ctx}\",\"repo\":\"${repo}\",\"tagname\":\"${tagname}\"}")
+            else
+              # push/pr: only when directory has changed files
+              MATCH=0
+              while IFS= read -r file; do
+                [[ -z "${file}" ]] && continue
+                if [[ "${file}" == "${CTX_CLEAN}/"* ]]; then
+                  echo "✅ directory changed: ${CTX_CLEAN}"
+                  MATCH=1
+                  break
+                fi
+              done < <(echo "${CHANGED_FILES}")
+              if [[ "${MATCH}" -eq 1 ]]; then
+                TARGET_ITEMS+=("{\"context\":\"${ctx}\",\"repo\":\"${repo}\",\"tagname\":\"${tagname}\"}")
               fi
-            done < <(echo "${CHANGED_FILES}")
-          fi
+            fi
+          done <<< "$BUILD_LIST"
 
           if [[ ${#TARGET_ITEMS[@]} -eq 0 ]]; then
             MATRIX='{"build":[]}'
             HAS_WORK="false"
           else
-            # 组装json矩阵
             ITEMS=$(printf "%s\n" "${TARGET_ITEMS[@]}" | jq -s '.')
             MATRIX=$(jq -n --argjson items "${ITEMS}" '{"build": $items}' --compact-output)
             HAS_WORK="true"
@@ -91,6 +86,9 @@ jobs:
           echo "has_work=${HAS_WORK}" >> $GITHUB_OUTPUT
           echo "final matrix: ${MATRIX}"
           echo "should build: ${HAS_WORK}"
+        env:
+          BUILD_LIST: ${{ env.BUILD_LIST }}
+
   build:
     needs: discovery
     if: ${{ needs.discovery.outputs.has_work == 'true' }}
@@ -157,7 +155,7 @@ jobs:
       - name: Validate amd64 container
         run: |
           IMG="${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMG_TAG_NAME }}"
-          docker run --rm --platform linux/amd64 "${IMG}" bash -c "echo 'amd64 runtime‑deps container OK'"
+          docker run --rm --platform linux/amd64 "${IMG}" bash -c "echo 'amd64 container validation OK'"
 
       - name: Install cosign
         if: ${{ github.event_name != 'pull_request' }}
