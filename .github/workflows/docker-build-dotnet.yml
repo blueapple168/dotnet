@@ -1,0 +1,173 @@
+name: Docker Build dotnet runtime‑deps (KylinOS & UOS, amd64 only)
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  PLATFORMS: linux/amd64
+  # 定义两组构建上下文与镜像repo
+  BUILD_1_CONTEXT: "./kylinos/dotnet/runtime-deps"
+  BUILD_1_REPO: "blueapple168/dotnet-kylinos/runtime-deps"
+  BUILD_2_CONTEXT: "./uos/dotnet/runtime-deps"
+  BUILD_2_REPO: "blueapple168/dotnet-uos/runtime-deps"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix_data: ${{ steps.gen_matrix.outputs.matrix_data }}
+      has_work: ${{ steps.gen_matrix.outputs.has_work }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+
+      - name: Generate build matrix decision
+        id: gen_matrix
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          C1: ${{ env.BUILD_1_CONTEXT }}
+          R1: ${{ env.BUILD_1_REPO }}
+          C2: ${{ env.BUILD_2_CONTEXT }}
+          R2: ${{ env.BUILD_2_REPO }}
+        run: |
+          # 清理 ./ 前缀
+          C1_CLEAN="${C1#./}"
+          C2_CLEAN="${C2#./}"
+          TARGET_ITEMS=()
+
+          if [[ "${REF_TYPE}" == "tag" ]]; then
+            # tag触发：全部强制构建
+            TARGET_ITEMS+=("{\"context\":\"${C1}\",\"repo\":\"${R1}\",\"tagname\":\"runtime-deps\"}")
+            TARGET_ITEMS+=("{\"context\":\"${C2}\",\"repo\":\"${R2}\",\"tagname\":\"runtime-deps\"}")
+          else
+            # push / pr: 判断目录下是否有文件变更
+            while IFS= read -r file; do
+              [[ -z "${file}" ]] && continue
+              if [[ "${file}" == "${C1_CLEAN}/"* ]]; then
+                echo "✅ kylinos directory changed"
+                TARGET_ITEMS+=("{\"context\":\"${C1}\",\"repo\":\"${R1}\",\"tagname\":\"runtime-deps\"}")
+                break
+              fi
+            done < <(echo "${CHANGED_FILES}")
+
+            while IFS= read -r file; do
+              [[ -z "${file}" ]] && continue
+              if [[ "${file}" == "${C2_CLEAN}/"* ]]; then
+                echo "✅ uos directory changed"
+                TARGET_ITEMS+=("{\"context\":\"${C2}\",\"repo\":\"${R2}\",\"tagname\":\"runtime-deps\"}")
+                break
+              fi
+            done < <(echo "${CHANGED_FILES}")
+          fi
+
+          if [[ ${#TARGET_ITEMS[@]} -eq 0 ]]; then
+            MATRIX='{"build":[]}'
+            HAS_WORK="false"
+          else
+            # 组装json矩阵
+            ITEMS=$(printf "%s\n" "${TARGET_ITEMS[@]}" | jq -s '.')
+            MATRIX=$(jq -n --argjson items "${ITEMS}" '{"build": $items}' --compact-output)
+            HAS_WORK="true"
+          fi
+          echo "matrix_data=${MATRIX}" >> $GITHUB_OUTPUT
+          echo "has_work=${HAS_WORK}" >> $GITHUB_OUTPUT
+          echo "final matrix: ${MATRIX}"
+          echo "should build: ${HAS_WORK}"
+  build:
+    needs: discovery
+    if: ${{ needs.discovery.outputs.has_work == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.discovery.outputs.matrix_data) }}
+      fail-fast: false
+    env:
+      CONTEXT_DIR: ${{ matrix.build.context }}
+      IMAGE_REPO: ${{ matrix.build.repo }}
+      IMG_TAG_NAME: ${{ matrix.build.tagname }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          qemu-version: latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:master
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}
+          tags: |
+            type=raw,value=${{ env.IMG_TAG_NAME }}
+            type=raw,value=${{ env.IMG_TAG_NAME }}-${{ github.sha }}
+
+      - name: Build and push
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ env.CONTEXT_DIR }}
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:buildcache,mode=max
+          build-args: |
+            BUILDKIT_PROGRESS=plain
+
+      - name: Print built image info
+        run: |
+          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMG_TAG_NAME }}"
+          echo "Built image: ${IMG}"
+          echo "Digest: ${{ steps.build-and-push.outputs.digest }}"
+
+      - name: Validate amd64 container
+        run: |
+          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMG_TAG_NAME }}"
+          docker run --rm --platform linux/amd64 "${IMG}" bash -c "echo 'amd64 runtime‑deps container OK'"
+
+      - name: Install cosign
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Keyless Sign Image
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}"
+          DIGEST="${{ steps.build-and-push.outputs.digest }}"
+          echo "Start signing ${IMAGE_FULL}@${DIGEST}"
+          cosign sign --yes "${IMAGE_FULL}@${DIGEST}"
