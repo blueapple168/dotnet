@@ -1,4 +1,4 @@
-ARG REPO=ghcr.io/blueapple168/dotnet-kylinos/runtime-deps:runtime-deps
+ARG REPO=ghcr.io/blueapple168/dotnet-uos/runtime-deps:runtime-deps
 
 # Installer image
 FROM $REPO AS installer
