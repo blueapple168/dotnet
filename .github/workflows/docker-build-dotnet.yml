@@ -58,12 +58,12 @@ jobs:
               # tag / manual trigger: add all
               TARGET_ITEMS+=("{\"context\":\"${ctx}\",\"repo\":\"${repo}\",\"tagname\":\"${tagname}\"}")
             else
-              # push/pr: only when directory has changed files
+              # push/pr: ONLY Dockerfile changed inside context directory
               MATCH=0
               while IFS= read -r file; do
                 [[ -z "${file}" ]] && continue
-                if [[ "${file}" == "${CTX_CLEAN}/"* ]]; then
-                  echo "✅ directory changed: ${CTX_CLEAN}"
+                if [[ "${file}" == "${CTX_CLEAN}/Dockerfile" ]]; then
+                  echo "✅ Dockerfile changed: ${CTX_CLEAN}/Dockerfile"
                   MATCH=1
                   break
                 fi
