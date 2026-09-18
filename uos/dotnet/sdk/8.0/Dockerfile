@@ -34,6 +34,7 @@ ENV \
     POWERSHELL_DISTRIBUTION_CHANNEL=PSDocker-DotnetSDK-UOS-V20
 
 RUN set -eux \
+    && curl -v https://enterprise-c-packages.chinauos.com/server-enterprise-c/ufu/kongzi/1070/Plus/x86_64/Packages/ \
     && yum install -y --setopt=install_weak_deps=false --nogpgcheck --nodocs \
        git \
        libatomic \
